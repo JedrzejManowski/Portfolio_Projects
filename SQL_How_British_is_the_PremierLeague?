@@ -1,0 +1,163 @@
+/*
+--SQL project - How British is the Premier League? 
+
+--Used features: Aggregation functions, View, Joins, Winsows Functions, CTE, Temp table, Procedure, Parameter, Subquery
+
+*/
+
+----------------------------------------------------------------------------------
+USE PL
+GO
+
+-- Review upload tables
+
+SELECT *
+FROM Players
+
+SELECT *
+FROM Stats
+
+SELECT *
+FROM PLTable
+ORDER BY  Position ASC
+
+---------------------------------------------------------------------------------
+
+-- How many Nationality and players are there?
+
+SELECT COUNT(DISTINCT Nationality) AS NumberOfNationality, COUNT(Name) AS NumberOfPlayers
+FROM Players
+
+-- How many English, Welsh, Northern Irish and Scottish players are there in the Premier League?
+
+SELECT Nationality, COUNT(name) AS PlayersAmount
+FROM Players
+WHERE Nationality IN('ENG','NIR','SCO','WAL')
+GROUP BY Nationality
+
+
+--Checking how many Biritsh and NoBritish players are there -- CTE
+
+WITH CTEBritish AS 
+(
+SELECT Nationality, COUNT(name) AS PlayersAmount,
+CASE WHEN Nationality IN('ENG','NIR','SCO','WAL') THEN 'Yes'
+ELSE 'No'
+END AS British
+FROM Players
+GROUP BY Nationality
+)
+
+SELECT British, SUM(PlayersAmount) AS PlayersAmount
+FROM CTEBritish
+GROUP BY British
+
+
+--------------------------------------------------------------------------------
+--Best Scorer by Nationality, >= 10 goals
+
+SELECT Nationality, COUNT(p.Name) AS PlayersAmountTopScorers, SUM(Goals) AS SumOfGoals, SUM(Goals)/COUNT(p.Name) AS GoalsPerTopStriker
+FROM Players p
+JOIN Stats s
+	ON p.Name = s.Name
+WHERE Goals>=10
+GROUP BY Nationality
+ORDER BY GoalsPerTopStriker DESC
+
+--Best Assists Players by Nationality, >=10 assist
+
+SELECT Nationality, COUNT(p.Name) AS PlayersAmountTopAssist, SUM(Assists) AS SumOfAssist
+FROM Players p
+JOIN Stats s
+	ON p.Name = s.Name
+WHERE Assists>=10
+GROUP BY Nationality
+ORDER BY SumOfAssist DESC
+
+--Goals, assists, minutes on the pitch made by British Players -- Temp table
+
+DROP TABLE IF EXISTS #BasicStats
+CREATE TABLE #BasicStats
+(Minutes int, Goals int, Assist int, British varchar(5))
+
+INSERT INTO #BasicStats
+SELECT s.Mins, s.Goals,s.Assists, 
+CASE WHEN Nationality IN('ENG','NIR','SCO','WAL') THEN 'Yes'
+ELSE 'No'
+END AS British
+FROM Players p
+JOIN Stats s
+	ON p.Name = s.Name
+
+
+SELECT British, SUM(Minutes) AS TotalMins, SUM(Goals) AS TotalGoals, SUM(Assist) AS TotalAssists
+FROM #BasicStats
+GROUP BY British
+
+---------------------------------------------------------------------------------
+--The created procedure allows to check the number and percentage of British players in given categories
+--Procedure, Parameter, Subquery, CTE
+
+CREATE PROCEDURE MinutesPlayed
+@mp int
+AS
+WITH CTEBritish AS 
+(
+SELECT Nationality, COUNT(p.name) AS PlayersAmount,
+CASE WHEN Nationality IN('ENG','NIR','SCO','WAL') THEN 'Yes'
+ELSE 'No'
+END AS British
+FROM Players p
+JOIN Stats s
+ON p.Name = s.Name
+WHERE s.Mins>= @mp
+GROUP BY Nationality
+)
+
+SELECT British, SUM(PlayersAmount) AS PlayersAmount, ((CONVERT(float,SUM(PlayersAmount))/(SELECT COUNT(p.Name) FROM Players p JOIN Stats s ON p.Name = s. Name WHERE s.Mins >= @mp)))*100 AS PercentofFootballer
+FROM CTEBritish
+GROUP BY British
+
+-- Running procedure
+
+EXEC MinutesPlayed
+@mp = 450 -- Wide Squad Players
+--@mp = 1710 -- First Team Players
+--@mp = 2700 -- Key Players
+
+---------------------------------------------------------------------------------
+
+--CREATING VIEWS FOR VISUALIZATIONS AND ANALYSIS 
+
+--Percentage of UK players in categories based on playing time
+-->=450 mins - Wide squad player
+-->1710 mins - First team player
+-->= 2700 mins - Key player
+
+CREATE VIEW PremierLeague AS
+SELECT p.Name, p.Club, p.Position, p.Age,s.Goals, s.Assists,s.Mins,
+CASE WHEN Nationality IN('ENG','NIR','SCO','WAL') THEN 'Yes'
+ELSE 'No'
+END AS British,
+CASE WHEN Mins >=2700 THEN 'Key player'
+WHEN Mins >=1710 THEN 'First team player'
+WHEN Mins >=450 THEN 'Wide squad player'
+ELSE 'Other'
+END AS PlayerRole,
+CASE WHEN t.Position <= 5 THEN 'Top 5'
+WHEN t.Position <= 10 THEN '6-10'
+WHEN t.Position <= 15 THEN '11-15'
+ELSE '16-20'
+END AS ClubLevel
+FROM Players p
+JOIN Stats s
+ON p.Name = s.Name
+JOIN PLTable t
+ON p.Club = t.Club
+
+
+--Table for visualisation and analyze
+
+SELECT club, Position, British, Age, Mins, Goals, Assists, PlayerRole, ClubLevel
+FROM PremierLeague
+
