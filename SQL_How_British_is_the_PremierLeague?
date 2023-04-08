@@ -1,5 +1,5 @@
 /*
---SQL project - How British is the Premier League? 
+--SQL project - How English/British is Premier League? 
 
 --Used features: Aggregation functions, View, Joins, Winsows Functions, CTE, Temp table, Procedure, Parameter, Subquery
 
@@ -160,4 +160,3 @@ ON p.Club = t.Club
 
 SELECT club, Position, British, Age, Mins, Goals, Assists, PlayerRole, ClubLevel
 FROM PremierLeague
-
